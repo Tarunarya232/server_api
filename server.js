@@ -6,7 +6,6 @@ import cors from "cors";
 
 const app = express();
 
-
 env.config();
 
 const port = process.env.PORT || 3000;
@@ -23,11 +22,17 @@ const db = new pg.Client({
     port: process.env.PG_PORT,
 });
 
-db.connect();
+db.connect((err) => {
+    if (err) {
+        console.error('Database connection error', err.stack);
+    } else {
+        console.log('Database connected');
+    }
+});
+
 app.get("/api/v1/restaurants", async (req, res) => {
     try {
-        const results = await db.query("SELECT restaurants.*, reviews.count,reviews.average_rating FROM restaurants LEFT JOIN (SELECT restaurant_id, COUNT(*) AS count, TRUNC(AVG(rating), 1) AS average_rating FROM reviews GROUP BY restaurant_id) reviews ON restaurants.id = reviews.restaurant_id;")
-        console.log(results.rows);
+        const results = await db.query("SELECT restaurants.*, reviews.count, reviews.average_rating FROM restaurants LEFT JOIN (SELECT restaurant_id, COUNT(*) AS count, TRUNC(AVG(rating), 1) AS average_rating FROM reviews GROUP BY restaurant_id) reviews ON restaurants.id = reviews.restaurant_id;");
         res.status(200).json({
             status: "success",
             results: results.rows.length,
@@ -47,7 +52,6 @@ app.get("/api/v1/restaurants", async (req, res) => {
 app.get("/api/v1/restaurants/:id", async (req, res) => {
     const id = parseInt(req.params.id);
     try {
-        // Query to fetch restaurant details along with reviews count and average rating
         const restaurantQuery = `
             SELECT 
                 restaurants.*, 
@@ -71,7 +75,6 @@ app.get("/api/v1/restaurants/:id", async (req, res) => {
                 restaurants.id = $1;
         `;
         const restaurantResult = await db.query(restaurantQuery, [id]);
-        // Query to fetch individual reviews for the restaurant
         const reviewsResult = await db.query("SELECT * FROM reviews WHERE restaurant_id = $1", [id]);
 
         res.status(200).json({
@@ -90,10 +93,8 @@ app.get("/api/v1/restaurants/:id", async (req, res) => {
     }
 });
 
-
 app.post("/api/v1/restaurants", async (req, res) => {
     const { name, location, price_range } = req.body;
-
     try {
         const result = await db.query("INSERT INTO restaurants (name, location, price_range) VALUES ($1, $2, $3) RETURNING *", [name, location, price_range]);
         res.status(201).json({
@@ -114,7 +115,6 @@ app.post("/api/v1/restaurants", async (req, res) => {
 app.put("/api/v1/restaurants/:id", async (req, res) => {
     const id = parseInt(req.params.id);
     const { name, location, price_range } = req.body;
-
     try {
         const result = await db.query("UPDATE restaurants SET name = $1, location = $2, price_range = $3 WHERE id = $4 RETURNING *", [name, location, price_range, id]);
         res.status(200).json({
@@ -136,7 +136,7 @@ app.delete("/api/v1/restaurants/:id", async (req, res) => {
     const id = parseInt(req.params.id);
     try {
         await db.query("DELETE FROM restaurants WHERE id = $1", [id]);
-        res.sendStatus(204);        
+        res.sendStatus(204);
     } catch (error) {
         console.error(error.message);
         res.status(500).json({
@@ -149,12 +149,8 @@ app.delete("/api/v1/restaurants/:id", async (req, res) => {
 app.post("/api/v1/restaurants/:id/addReview", async (req, res) => {
     const id = req.params.id;
     const { name, review, rating } = req.body;
-
     try {
-        const newReview = await db.query(
-            "INSERT INTO reviews (name, review, rating, restaurant_id) VALUES ($1, $2, $3, $4) returning *;",
-            [name, review, rating, id]
-        );
+        const newReview = await db.query("INSERT INTO reviews (name, review, rating, restaurant_id) VALUES ($1, $2, $3, $4) returning *;", [name, review, rating, id]);
         res.status(201).json({
             status: 'success',
             data: {
@@ -165,7 +161,7 @@ app.post("/api/v1/restaurants/:id/addReview", async (req, res) => {
         console.error(error);
         res.status(500).json({
             status: 'error',
-            message: 'Internal Server Error'
+            message: 'Internal Server Error',
         });
     }
 });
